@@ -4,8 +4,6 @@ go 1.21
 
 require (
 	github.com/alicebob/miniredis/v2 v2.23.0
-	github.com/asdine/storm v2.1.2+incompatible
-	github.com/asdine/storm/v3 v3.2.1
 	github.com/dgraph-io/badger/v4 v4.2.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/gorilla/websocket v1.5.0
@@ -17,7 +15,6 @@ require (
 )
 
 require (
-	github.com/DataDog/zstd v1.4.5 // indirect
 	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
