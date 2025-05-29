@@ -45,14 +45,14 @@ func TestWebsocketProtocolTLS(t *testing.T) {
 func TestWebsocketInit(t *testing.T) {
 	l := NewWebsocket(basicConfig)
 	require.Nil(t, l.listen)
-	err := l.Init(logger)
+	err := l.Init(nil)
 	require.NoError(t, err)
 	require.NotNil(t, l.listen)
 }
 
 func TestWebsocketServeAndClose(t *testing.T) {
 	l := NewWebsocket(basicConfig)
-	_ = l.Init(logger)
+	_ = l.Init(&logger)
 
 	o := make(chan bool)
 	go func(o chan bool) {
@@ -73,7 +73,7 @@ func TestWebsocketServeAndClose(t *testing.T) {
 
 func TestWebsocketServeTLSAndClose(t *testing.T) {
 	l := NewWebsocket(tlsConfig)
-	err := l.Init(logger)
+	err := l.Init(&logger)
 	require.NoError(t, err)
 
 	o := make(chan bool)
@@ -95,7 +95,7 @@ func TestWebsocketFailedToServe(t *testing.T) {
 	config := tlsConfig
 	config.Address = "wrong_addr"
 	l := NewWebsocket(config)
-	err := l.Init(logger)
+	err := l.Init(&logger)
 	require.NoError(t, err)
 
 	o := make(chan bool)
@@ -114,7 +114,7 @@ func TestWebsocketFailedToServe(t *testing.T) {
 
 func TestWebsocketUpgrade(t *testing.T) {
 	l := NewWebsocket(basicConfig)
-	_ = l.Init(logger)
+	_ = l.Init(&logger)
 
 	e := make(chan bool)
 	l.establish = func(id string, c net.Conn) error {

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"log/slog"
+	"github.com/rs/zerolog"
 )
 
 const TypeUnix = "unix"
@@ -18,12 +18,12 @@ const TypeUnix = "unix"
 // UnixSock is a listener for establishing client connections on basic UnixSock protocol.
 type UnixSock struct {
 	sync.RWMutex
-	id      string       // the internal id of the listener.
-	address string       // the network address to bind to.
-	config  Config       // configuration values for the listener
-	listen  net.Listener // a net.Listener which will listen for new clients.
-	log     *slog.Logger // server logger
-	end     uint32       // ensure the close methods are only called once.
+	id      string          // the internal id of the listener.
+	address string          // the network address to bind to.
+	config  Config          // configuration values for the listener
+	listen  net.Listener    // a net.Listener which will listen for new clients.
+	log     *zerolog.Logger // server logger
+	end     uint32          // ensure the close methods are only called once.
 }
 
 // NewUnixSock initializes and returns a new UnixSock listener, listening on an address.
@@ -51,7 +51,7 @@ func (l *UnixSock) Protocol() string {
 }
 
 // Init initializes the listener.
-func (l *UnixSock) Init(log *slog.Logger) error {
+func (l *UnixSock) Init(log *zerolog.Logger) error {
 	l.log = log
 
 	var err error
@@ -77,7 +77,7 @@ func (l *UnixSock) Serve(establish EstablishFn) {
 			go func() {
 				err = establish(l.id, conn)
 				if err != nil {
-					l.log.Warn("", "error", err)
+					l.log.Warn().Err(err).Send()
 				}
 			}()
 		}

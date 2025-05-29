@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/mochi-mqtt/server/v2/packets"
 	"github.com/mochi-mqtt/server/v2/system"
+	"github.com/rs/zerolog"
 
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +33,7 @@ func newTestClient() (cl *Client, r net.Conn, w net.Conn) {
 	cl = newClient(w, &ops{
 		info:  new(system.Info),
 		hooks: new(Hooks),
-		log:   logger,
+		log:   &logger,
 		options: &Options{
 			Capabilities: &Capabilities{
 				ReceiveMaximum:             10,
@@ -258,7 +258,8 @@ func TestClientParseConnectBelowMinimumKeepalive(t *testing.T) {
 	cl, _, _ := newTestClient()
 	var b bytes.Buffer
 	x := bufio.NewWriter(&b)
-	cl.ops.log = slog.New(slog.NewTextHandler(x, nil))
+	logger := zerolog.New(x).With().Timestamp().Logger()
+	cl.ops.log = &logger
 
 	pk := packets.Packet{
 		ProtocolVersion: 4,
@@ -757,7 +758,7 @@ func TestClientWritePacketBuffer(t *testing.T) {
 	cl := newClient(w, &ops{
 		info:  new(system.Info),
 		hooks: new(Hooks),
-		log:   logger,
+		log:   &logger,
 		options: &Options{
 			Capabilities: &Capabilities{
 				ReceiveMaximum:             10,

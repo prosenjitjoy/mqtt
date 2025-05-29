@@ -9,7 +9,7 @@ import (
 	"net"
 	"sync"
 
-	"log/slog"
+	"github.com/rs/zerolog"
 )
 
 const TypeMock = "mock"
@@ -55,7 +55,7 @@ func (l *MockListener) Serve(establisher EstablishFn) {
 }
 
 // Init initializes the listener.
-func (l *MockListener) Init(log *slog.Logger) error {
+func (l *MockListener) Init(log *zerolog.Logger) error {
 	if l.ErrListen {
 		return fmt.Errorf("listen failure")
 	}

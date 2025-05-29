@@ -5,13 +5,13 @@
 package debug
 
 import (
-	"fmt"
-	"log/slog"
 	"strings"
 
-	mqtt "github.com/mochi-mqtt/server/v2"
+	"github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/storage"
 	"github.com/mochi-mqtt/server/v2/packets"
+
+	"github.com/rs/zerolog"
 )
 
 // Options contains configuration settings for the debug output.
@@ -26,7 +26,7 @@ type Options struct {
 type Hook struct {
 	mqtt.HookBase
 	config *Options
-	Log    *slog.Logger
+	Log    *zerolog.Logger
 }
 
 // ID returns the ID of the hook.
@@ -55,25 +55,25 @@ func (h *Hook) Init(config any) error {
 }
 
 // SetOpts is called when the hook receives inheritable server parameters.
-func (h *Hook) SetOpts(l *slog.Logger, opts *mqtt.HookOptions) {
+func (h *Hook) SetOpts(l *zerolog.Logger, opts *mqtt.HookOptions) {
 	h.Log = l
-	h.Log.Debug("", "method", "SetOpts")
+	h.Log.Debug().Interface("opts", opts).Str("method", "SetOpts").Send()
 }
 
 // Stop is called when the hook is stopped.
 func (h *Hook) Stop() error {
-	h.Log.Debug("", "method", "Stop")
+	h.Log.Debug().Str("method", "Stop").Send()
 	return nil
 }
 
 // OnStarted is called when the server starts.
 func (h *Hook) OnStarted() {
-	h.Log.Debug("", "method", "OnStarted")
+	h.Log.Debug().Str("method", "OnStarted").Send()
 }
 
 // OnStopped is called when the server stops.
 func (h *Hook) OnStopped() {
-	h.Log.Debug("", "method", "OnStopped")
+	h.Log.Debug().Str("method", "OnStopped").Send()
 }
 
 // OnPacketRead is called when a new packet is received from a client.
@@ -82,7 +82,8 @@ func (h *Hook) OnPacketRead(cl *mqtt.Client, pk packets.Packet) (packets.Packet,
 		return pk, nil
 	}
 
-	h.Log.Debug(fmt.Sprintf("%s << %s", strings.ToUpper(packets.PacketNames[pk.FixedHeader.Type]), cl.ID), "m", h.packetMeta(pk))
+	h.Log.Debug().Interface("m", h.packetMeta(pk)).Msgf("%s << %s", strings.ToUpper(packets.PacketNames[pk.FixedHeader.Type]), cl.ID)
+
 	return pk, nil
 }
 
@@ -92,72 +93,85 @@ func (h *Hook) OnPacketSent(cl *mqtt.Client, pk packets.Packet, b []byte) {
 		return
 	}
 
-	h.Log.Debug(fmt.Sprintf("%s >> %s", strings.ToUpper(packets.PacketNames[pk.FixedHeader.Type]), cl.ID), "m", h.packetMeta(pk))
+	h.Log.Debug().Interface("m", h.packetMeta(pk)).Msgf("%s >> %s", strings.ToUpper(packets.PacketNames[pk.FixedHeader.Type]), cl.ID)
 }
 
 // OnRetainMessage is called when a published message is retained (or retain deleted/modified).
 func (h *Hook) OnRetainMessage(cl *mqtt.Client, pk packets.Packet, r int64) {
-	h.Log.Debug("retained message on topic", "m", h.packetMeta(pk))
+	h.Log.Debug().Interface("m", h.packetMeta(pk)).Msgf("retained message on topic")
 }
 
 // OnQosPublish is called when a publish packet with Qos is issued to a subscriber.
 func (h *Hook) OnQosPublish(cl *mqtt.Client, pk packets.Packet, sent int64, resends int) {
-	h.Log.Debug("inflight out", "m", h.packetMeta(pk))
+	h.Log.Debug().Interface("m", h.packetMeta(pk)).Msgf("inflight out")
 }
 
 // OnQosComplete is called when the Qos flow for a message has been completed.
 func (h *Hook) OnQosComplete(cl *mqtt.Client, pk packets.Packet) {
-	h.Log.Debug("inflight complete", "m", h.packetMeta(pk))
+	h.Log.Debug().Interface("m", h.packetMeta(pk)).Msgf("inflight complete")
 }
 
 // OnQosDropped is called the Qos flow for a message expires.
 func (h *Hook) OnQosDropped(cl *mqtt.Client, pk packets.Packet) {
-	h.Log.Debug("inflight dropped", "m", h.packetMeta(pk))
+	h.Log.Debug().Interface("m", h.packetMeta(pk)).Msgf("inflight dropped")
 }
 
 // OnLWTSent is called when a Will Message has been issued from a disconnecting client.
 func (h *Hook) OnLWTSent(cl *mqtt.Client, pk packets.Packet) {
-	h.Log.Debug("sent lwt for client", "method", "OnLWTSent", "client", cl.ID)
+	h.Log.Debug().Str("method", "OnLWTSent").Str("client", cl.ID).Msg("sent lwt for client")
 }
 
 // OnRetainedExpired is called when the server clears expired retained messages.
 func (h *Hook) OnRetainedExpired(filter string) {
-	h.Log.Debug("retained message expired", "method", "OnRetainedExpired", "topic", filter)
+	h.Log.Debug().Str("method", "OnRetainedExpired").Str("topic", filter).Msg("retained message expired")
 }
 
 // OnClientExpired is called when the server clears an expired client.
 func (h *Hook) OnClientExpired(cl *mqtt.Client) {
-	h.Log.Debug("client session expired", "method", "OnClientExpired", "client", cl.ID)
+	h.Log.Debug().Str("method", "OnClientExpired").Str("client", cl.ID).Msg("client session expired")
 }
 
 // StoredClients is called when the server restores clients from a store.
 func (h *Hook) StoredClients() (v []storage.Client, err error) {
-	h.Log.Debug("", "method", "StoredClients")
+	h.Log.Debug().
+		Str("method", "StoredClients").
+		Send()
 
 	return v, nil
 }
 
 // StoredSubscriptions is called when the server restores subscriptions from a store.
 func (h *Hook) StoredSubscriptions() (v []storage.Subscription, err error) {
-	h.Log.Debug("", "method", "StoredSubscriptions")
+	h.Log.Debug().
+		Str("method", "StoredSubscriptions").
+		Send()
+
 	return v, nil
 }
 
 // StoredRetainedMessages is called when the server restores retained messages from a store.
 func (h *Hook) StoredRetainedMessages() (v []storage.Message, err error) {
-	h.Log.Debug("", "method", "StoredRetainedMessages")
+	h.Log.Debug().
+		Str("method", "StoredRetainedMessages").
+		Send()
+
 	return v, nil
 }
 
 // StoredInflightMessages is called when the server restores inflight messages from a store.
 func (h *Hook) StoredInflightMessages() (v []storage.Message, err error) {
-	h.Log.Debug("", "method", "StoredInflightMessages")
+	h.Log.Debug().
+		Str("method", "StoredInflightMessages").
+		Send()
+
 	return v, nil
 }
 
 // StoredSysInfo is called when the server restores system info from a store.
 func (h *Hook) StoredSysInfo() (v storage.SystemInfo, err error) {
-	h.Log.Debug("", "method", "StoredSysInfo")
+	h.Log.Debug().
+		Str("method", "StoredClients").
+		Send()
 
 	return v, nil
 }

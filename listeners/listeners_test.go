@@ -11,8 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"log/slog"
-
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,7 +21,7 @@ var (
 	basicConfig = Config{ID: "t1", Address: testAddr}
 	tlsConfig   = Config{ID: "t1", Address: testAddr, TLSConfig: tlsConfigBasic}
 
-	logger = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger = zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.Disabled)
 
 	testCertificate = []byte(`-----BEGIN CERTIFICATE-----
 MIIB/zCCAWgCCQDm3jV+lSF1AzANBgkqhkiG9w0BAQsFADBEMQswCQYDVQQGEwJB

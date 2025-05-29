@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	mqtt "github.com/mochi-mqtt/server/v2"
+	"github.com/mochi-mqtt/server/v2"
 	"github.com/mochi-mqtt/server/v2/hooks/auth"
 	"github.com/mochi-mqtt/server/v2/listeners"
 )
@@ -55,7 +55,7 @@ func main() {
 	}()
 
 	<-done
-	server.Log.Warn("caught signal, stopping...")
-	_ = server.Close()
-	server.Log.Info("main.go finished")
+	server.Log.Warn().Msg("caught signal, stopping...")
+	server.Close()
+	server.Log.Info().Msg("main.go finished")
 }

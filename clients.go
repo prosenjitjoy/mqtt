@@ -196,8 +196,7 @@ func (cl *Client) WriteLoop() {
 		select {
 		case pk := <-cl.State.outbound:
 			if err := cl.WritePacket(*pk); err != nil {
-				// TODO : Figure out what to do with error
-				cl.ops.log.Debug("failed publishing packet", "error", err, "client", cl.ID, "packet", pk)
+				cl.ops.log.Debug().Err(err).Str("client", cl.ID).Interface("packet", pk).Msg("failed publishing packet")
 			}
 			atomic.AddInt32(&cl.State.outboundQty, -1)
 		case <-cl.State.open.Done():
@@ -220,12 +219,11 @@ func (cl *Client) ParseConnect(lid string, pk packets.Packet) {
 	}
 
 	if pk.Connect.Keepalive <= minimumKeepalive {
-		cl.ops.log.Warn(
-			ErrMinimumKeepalive.Error(),
-			"client", cl.ID,
-			"keepalive", pk.Connect.Keepalive,
-			"recommended", minimumKeepalive,
-		)
+		cl.ops.log.Warn().
+			Str("client", cl.ID).
+			Uint16("keepalive", pk.Connect.Keepalive).
+			Uint16("recommended", minimumKeepalive).
+			Msg(ErrMinimumKeepalive.Error())
 	}
 
 	cl.State.Keepalive = pk.Connect.Keepalive                                              // [MQTT-3.2.2-22]

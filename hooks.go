@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: MIT
 // SPDX-FileCopyrightText: 2022 mochi-mqtt, mochi-co
-// SPDX-FileContributor: mochi-co, thedevop, dgduncan
+// SPDX-FileContributor: mochi-co, thedevop
 
 package mqtt
 
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"sync"
 	"sync/atomic"
 
 	"github.com/mochi-mqtt/server/v2/hooks/storage"
 	"github.com/mochi-mqtt/server/v2/packets"
 	"github.com/mochi-mqtt/server/v2/system"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -75,8 +76,7 @@ type Hook interface {
 	Provides(b byte) bool
 	Init(config any) error
 	Stop() error
-	SetOpts(l *slog.Logger, o *HookOptions)
-
+	SetOpts(l *zerolog.Logger, o *HookOptions)
 	OnStarted()
 	OnStopped()
 	OnConnectAuthenticate(cl *Client, pk packets.Packet) bool
@@ -123,11 +123,11 @@ type HookOptions struct {
 
 // Hooks is a slice of Hook interfaces to be called in sequence.
 type Hooks struct {
-	Log        *slog.Logger   // a logger for the hook (from the server)
-	internal   atomic.Value   // a slice of []Hook
-	wg         sync.WaitGroup // a waitgroup for syncing hook shutdown
-	qty        int64          // the number of hooks in use
-	sync.Mutex                // a mutex for locking when adding hooks
+	Log        *zerolog.Logger // a logger for the hook (from the server)
+	internal   atomic.Value    // a slice of []Hook
+	wg         sync.WaitGroup  // a waitgroup for syncing hook shutdown
+	qty        int64           // the number of hooks in use
+	sync.Mutex                 // a mutex for locking when adding hooks
 }
 
 // Len returns the number of hooks added.
@@ -185,9 +185,9 @@ func (h *Hooks) GetAll() []Hook {
 func (h *Hooks) Stop() {
 	go func() {
 		for _, hook := range h.GetAll() {
-			h.Log.Info("stopping hook", "hook", hook.ID())
+			h.Log.Info().Str("hook", hook.ID()).Msg("stopping hook")
 			if err := hook.Stop(); err != nil {
-				h.Log.Debug("problem stopping hook", "error", err, "hook", hook.ID())
+				h.Log.Debug().Err(err).Str("hook", hook.ID()).Msg("problem stopping hook")
 			}
 
 			h.wg.Done()
@@ -272,7 +272,7 @@ func (h *Hooks) OnPacketRead(cl *Client, pk packets.Packet) (pkx packets.Packet,
 		if hook.Provides(OnPacketRead) {
 			npk, err := hook.OnPacketRead(cl, pkx)
 			if err != nil && errors.Is(err, packets.ErrRejectPacket) {
-				h.Log.Debug("packet rejected", "hook", hook.ID(), "packet", pkx)
+				h.Log.Debug().Err(err).Str("hook", hook.ID()).Interface("packet", pkx).Msg("packet rejected")
 				return pk, err
 			} else if err != nil {
 				continue
@@ -400,16 +400,10 @@ func (h *Hooks) OnPublish(cl *Client, pk packets.Packet) (pkx packets.Packet, er
 			npk, err := hook.OnPublish(cl, pkx)
 			if err != nil {
 				if errors.Is(err, packets.ErrRejectPacket) {
-					h.Log.Debug("publish packet rejected",
-						"error", err,
-						"hook", hook.ID(),
-						"packet", pkx)
+					h.Log.Debug().Err(err).Str("hook", hook.ID()).Interface("packet", pkx).Msg("publish packet rejected")
 					return pk, err
 				}
-				h.Log.Error("publish packet error",
-					"error", err,
-					"hook", hook.ID(),
-					"packet", pkx)
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Interface("packet", pkx).Msg("publish packet error")
 				return pk, err
 			}
 			pkx = npk
@@ -508,10 +502,7 @@ func (h *Hooks) OnWill(cl *Client, will Will) Will {
 		if hook.Provides(OnWill) {
 			mlwt, err := hook.OnWill(cl, will)
 			if err != nil {
-				h.Log.Error("parse will error",
-					"error", err,
-					"hook", hook.ID(),
-					"will", will)
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Interface("will", will).Msg("parse will error")
 				continue
 			}
 			will = mlwt
@@ -555,7 +546,7 @@ func (h *Hooks) StoredClients() (v []storage.Client, err error) {
 		if hook.Provides(StoredClients) {
 			v, err := hook.StoredClients()
 			if err != nil {
-				h.Log.Error("failed to load clients", "error", err, "hook", hook.ID())
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Msg("failed to load clients")
 				return v, err
 			}
 
@@ -575,7 +566,7 @@ func (h *Hooks) StoredSubscriptions() (v []storage.Subscription, err error) {
 		if hook.Provides(StoredSubscriptions) {
 			v, err := hook.StoredSubscriptions()
 			if err != nil {
-				h.Log.Error("failed to load subscriptions", "error", err, "hook", hook.ID())
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Msg("failed to load subscriptions")
 				return v, err
 			}
 
@@ -595,7 +586,7 @@ func (h *Hooks) StoredInflightMessages() (v []storage.Message, err error) {
 		if hook.Provides(StoredInflightMessages) {
 			v, err := hook.StoredInflightMessages()
 			if err != nil {
-				h.Log.Error("failed to load inflight messages", "error", err, "hook", hook.ID())
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Msg("failed to load inflight messages")
 				return v, err
 			}
 
@@ -615,7 +606,7 @@ func (h *Hooks) StoredRetainedMessages() (v []storage.Message, err error) {
 		if hook.Provides(StoredRetainedMessages) {
 			v, err := hook.StoredRetainedMessages()
 			if err != nil {
-				h.Log.Error("failed to load retained messages", "error", err, "hook", hook.ID())
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Msg("failed to load retained messages")
 				return v, err
 			}
 
@@ -634,7 +625,7 @@ func (h *Hooks) StoredSysInfo() (v storage.SystemInfo, err error) {
 		if hook.Provides(StoredSysInfo) {
 			v, err := hook.StoredSysInfo()
 			if err != nil {
-				h.Log.Error("failed to load $SYS info", "error", err, "hook", hook.ID())
+				h.Log.Error().Err(err).Str("hook", hook.ID()).Msg("failed to load $SYS info")
 				return v, err
 			}
 
@@ -683,7 +674,7 @@ func (h *Hooks) OnACLCheck(cl *Client, topic string, write bool) bool {
 // all hooks.
 type HookBase struct {
 	Hook
-	Log  *slog.Logger
+	Log  *zerolog.Logger
 	Opts *HookOptions
 }
 
@@ -706,7 +697,7 @@ func (h *HookBase) Init(config any) error {
 
 // SetOpts is called by the server to propagate internal values and generally should
 // not be called manually.
-func (h *HookBase) SetOpts(l *slog.Logger, opts *HookOptions) {
+func (h *HookBase) SetOpts(l *zerolog.Logger, opts *HookOptions) {
 	h.Log = l
 	h.Opts = opts
 }

@@ -49,9 +49,14 @@ func main() {
 
 		// Subscribe to a filter and handle any received messages via a callback function.
 		callbackFn := func(cl *mqtt.Client, sub packets.Subscription, pk packets.Packet) {
-			server.Log.Info("inline client received message from subscription", "client", cl.ID, "subscriptionId", sub.Identifier, "topic", pk.TopicName, "payload", string(pk.Payload))
+			server.Log.Info().
+				Str("client", cl.ID).
+				Int("subscriptionId", sub.Identifier).
+				Str("topic", pk.TopicName).
+				Str("payload", string(pk.Payload)).
+				Msg("inline client received message from subscription")
 		}
-		server.Log.Info("inline client subscribing")
+		server.Log.Info().Msg("inline client subscribing")
 		_ = server.Subscribe("direct/#", 1, callbackFn)
 		_ = server.Subscribe("direct/#", 2, callbackFn)
 	}()
@@ -63,21 +68,21 @@ func main() {
 		for range time.Tick(time.Second * 3) {
 			err := server.Publish("direct/publish", []byte("scheduled message"), false, 0)
 			if err != nil {
-				server.Log.Error("server.Publish", "error", err)
+				server.Log.Error().Err(err).Msg("server.Publish")
 			}
-			server.Log.Info("main.go issued direct message to direct/publish")
+			server.Log.Info().Msg("main.go issued direct message to direct/publish")
 		}
 	}()
 
 	go func() {
 		time.Sleep(time.Second * 10)
 		// Unsubscribe from the same filter to stop receiving messages.
-		server.Log.Info("inline client unsubscribing")
+		server.Log.Info().Msg("inline client unsubscribing")
 		_ = server.Unsubscribe("direct/#", 1)
 	}()
 
 	<-done
-	server.Log.Warn("caught signal, stopping...")
+	server.Log.Warn().Msg("caught signal, stopping...")
 	_ = server.Close()
-	server.Log.Info("main.go finished")
+	server.Log.Info().Msg("main.go finished")
 }

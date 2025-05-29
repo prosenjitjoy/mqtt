@@ -14,9 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"log/slog"
-
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
 )
 
 const TypeWS = "ws"
@@ -33,7 +32,7 @@ type Websocket struct { // [MQTT-4.2.0-1]
 	address   string              // the network address to bind to
 	config    Config              // configuration values for the listener
 	listen    *http.Server        // a http server for serving websocket connections
-	log       *slog.Logger        // server logger
+	log       *zerolog.Logger     // server logger
 	establish EstablishFn         // the server's establish connection handler
 	upgrader  *websocket.Upgrader //  upgrade the incoming http/tcp connection to a websocket compliant connection.
 	end       uint32              // ensure the close methods are only called once
@@ -74,7 +73,7 @@ func (l *Websocket) Protocol() string {
 }
 
 // Init initializes the listener.
-func (l *Websocket) Init(log *slog.Logger) error {
+func (l *Websocket) Init(log *zerolog.Logger) error {
 	l.log = log
 
 	mux := http.NewServeMux()
@@ -100,7 +99,7 @@ func (l *Websocket) handler(w http.ResponseWriter, r *http.Request) {
 
 	err = l.establish(l.id, &wsConn{Conn: c.UnderlyingConn(), c: c})
 	if err != nil {
-		l.log.Warn("", "error", err)
+		l.log.Warn().Err(err).Send()
 	}
 }
 
@@ -118,7 +117,7 @@ func (l *Websocket) Serve(establish EstablishFn) {
 
 	// After the listener has been shutdown, no need to print the http.ErrServerClosed error.
 	if err != nil && atomic.LoadUint32(&l.end) == 0 {
-		l.log.Error("failed to serve.", "error", err, "listener", l.id)
+		l.log.Error().Err(err).Str("listener", l.id).Msg("failed to serve.")
 	}
 }
 

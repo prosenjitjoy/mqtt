@@ -23,7 +23,7 @@ import (
 	"github.com/mochi-mqtt/server/v2/packets"
 	"github.com/mochi-mqtt/server/v2/system"
 
-	"log/slog"
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -114,14 +114,11 @@ type Options struct {
 
 	// Logger specifies a custom configured implementation of zerolog to override
 	// the servers default logger configuration. If you wish to change the log level,
-	// of the default logger, you can do so by setting:
-	// server := mqtt.New(nil)
-	// level := new(slog.LevelVar)
-	// server.Slog = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-	// 	Level: level,
-	// }))
-	// level.Set(slog.LevelDebug)
-	Logger *slog.Logger `yaml:"-" json:"-"`
+	// of the default logger, you can do so by setting
+	// 	server := mqtt.New(nil)
+	// 	l := server.Log.Level(zerolog.DebugLevel)
+	// 	server.Log = &l
+	Logger *zerolog.Logger
 
 	// SysTopicResendInterval specifies the interval between $SYS topic updates in seconds.
 	SysTopicResendInterval int64 `yaml:"sys_topic_resend_interval" json:"sys_topic_resend_interval"`
@@ -141,7 +138,7 @@ type Server struct {
 	Info         *system.Info         // values about the server commonly known as $SYS topics
 	loop         *loop                // loop contains tickers for the system event loop
 	done         chan bool            // indicate that the server is ending
-	Log          *slog.Logger         // minimal no-alloc logger
+	Log          *zerolog.Logger      // minimal no-alloc logger
 	hooks        *Hooks               // hooks contains hooks for extra functionality such as auth and persistent storage
 	inlineClient *Client              // inlineClient is a special client used for inline subscriptions and inline Publish
 }
@@ -158,10 +155,10 @@ type loop struct {
 
 // ops contains server values which can be propagated to other structs.
 type ops struct {
-	options *Options     // a pointer to the server options and capabilities, for referencing in clients
-	info    *system.Info // pointers to server system info
-	hooks   *Hooks       // pointer to the server hooks
-	log     *slog.Logger // a structured logger for the client
+	options *Options        // a pointer to the server options and capabilities, for referencing in clients
+	info    *system.Info    // pointers to server system info
+	hooks   *Hooks          // pointer to the server hooks
+	log     *zerolog.Logger // a structured logger for the client
 }
 
 // New returns a new instance of mochi mqtt broker. Optional parameters
@@ -230,8 +227,8 @@ func (o *Options) ensureDefaults() {
 	}
 
 	if o.Logger == nil {
-		log := slog.New(slog.NewTextHandler(os.Stdout, nil))
-		o.Logger = log
+		log := zerolog.New(os.Stderr).With().Timestamp().Logger().Level(zerolog.InfoLevel).Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		o.Logger = &log
 	}
 }
 
@@ -263,12 +260,12 @@ func (s *Server) NewClient(c net.Conn, listener string, id string, inline bool) 
 // AddHook attaches a new Hook to the server. Ideally, this should be called
 // before the server is started with s.Serve().
 func (s *Server) AddHook(hook Hook, config any) error {
-	nl := s.Log.With("hook", hook.ID())
-	hook.SetOpts(nl, &HookOptions{
+	nl := s.Log.With().Str("hook", hook.ID()).Logger()
+	hook.SetOpts(&nl, &HookOptions{
 		Capabilities: s.Options.Capabilities,
 	})
 
-	s.Log.Info("added hook", "hook", hook.ID())
+	s.Log.Info().Str("hook", hook.ID()).Msg("added hook")
 	return s.hooks.Add(hook, config)
 }
 
@@ -289,15 +286,15 @@ func (s *Server) AddListener(l listeners.Listener) error {
 		return ErrListenerIDExists
 	}
 
-	nl := s.Log.With(slog.String("listener", l.ID()))
-	err := l.Init(nl)
+	nl := s.Log.With().Str("listener", l.ID()).Logger()
+	err := l.Init(&nl)
 	if err != nil {
 		return err
 	}
 
 	s.Listeners.Add(l)
 
-	s.Log.Info("attached listener", "id", l.ID(), "protocol", l.Protocol(), "address", l.Address())
+	s.Log.Info().Str("id", l.ID()).Str("protocol", l.Protocol()).Str("address", l.Address()).Msg("attached listener")
 	return nil
 }
 
@@ -320,7 +317,7 @@ func (s *Server) AddListenersFromConfig(configs []listeners.Config) error {
 		case listeners.TypeMock:
 			l = listeners.NewMockListener(conf.ID, conf.Address)
 		default:
-			s.Log.Error("listener type unavailable by config", "listener", conf.Type)
+			s.Log.Error().Str("listener", conf.Type).Msg("listener type unavailable by config")
 			continue
 		}
 		if err := s.AddListener(l); err != nil {
@@ -333,8 +330,8 @@ func (s *Server) AddListenersFromConfig(configs []listeners.Config) error {
 // Serve starts the event loops responsible for establishing client connections
 // on all attached listeners, publishing the system topics, and starting all hooks.
 func (s *Server) Serve() error {
-	s.Log.Info("mochi mqtt starting", "version", Version)
-	defer s.Log.Info("mochi mqtt server started")
+	s.Log.Info().Str("version", Version).Msg("mochi mqtt starting")
+	defer s.Log.Info().Msg("mochi mqtt server started")
 
 	if len(s.Options.Listeners) > 0 {
 		err := s.AddListenersFromConfig(s.Options.Listeners)
@@ -373,8 +370,8 @@ func (s *Server) Serve() error {
 
 // eventLoop loops forever, running various server housekeeping methods at different intervals.
 func (s *Server) eventLoop() {
-	s.Log.Debug("system event loop started")
-	defer s.Log.Debug("system event loop halted")
+	s.Log.Debug().Msg("system event loop started")
+	defer s.Log.Debug().Msg("system event loop halted")
 
 	for {
 		select {
@@ -480,8 +477,8 @@ func (s *Server) attachClient(cl *Client, listener string) error {
 	} else {
 		cl.Properties.Will = Will{} // [MQTT-3.14.4-3] [MQTT-3.1.2-10]
 	}
-	s.Log.Debug("client disconnected", "error", err, "client", cl.ID, "remote", cl.Net.Remote, "listener", listener)
 
+	s.Log.Debug().Str("client", cl.ID).Err(err).Str("remote", cl.Net.Remote).Str("listener", listener).Msg("client disconnected")
 	expire := (cl.Properties.ProtocolVersion == 5 && cl.Properties.Props.SessionExpiryInterval == 0) || (cl.Properties.ProtocolVersion < 5 && cl.Properties.Clean)
 	s.hooks.OnDisconnect(cl, err, expire)
 
@@ -526,7 +523,7 @@ func (s *Server) receivePacket(cl *Client, pk packets.Packet) error {
 			_ = s.DisconnectClient(cl, code)
 		}
 
-		s.Log.Warn("error processing packet", "error", err, "client", cl.ID, "listener", cl.Net.Listener, "pk", pk)
+		s.Log.Warn().Err(err).Str("client", cl.ID).Str("listener", cl.Net.Listener).Interface("pk", pk).Msg("error processing packet")
 
 		return err
 	}
@@ -591,7 +588,10 @@ func (s *Server) inheritClientSession(pk packets.Packet, cl *Client) bool {
 		s.UnsubscribeClient(existing)
 		existing.ClearInflights()
 
-		s.Log.Debug("session taken over", "client", cl.ID, "old_remote", existing.Net.Remote, "new_remote", cl.Net.Remote)
+		s.Log.Debug().Str("client", cl.ID).
+			Str("old_remote", existing.Net.Remote).
+			Str("new_remote", cl.Net.Remote).
+			Msg("session taken over")
 
 		return true // [MQTT-3.2.2-3]
 	}
@@ -1008,7 +1008,7 @@ func (s *Server) publishToSubscribers(pk packets.Packet) {
 		if cl, ok := s.Clients.Get(id); ok {
 			_, err := s.publishToClient(cl, subs, pk)
 			if err != nil {
-				s.Log.Debug("failed publishing packet", "error", err, "client", cl.ID, "packet", pk)
+				s.Log.Debug().Err(err).Str("client", cl.ID).Interface("packet", pk).Msg("failed publishing packet")
 			}
 		}
 	}
@@ -1058,7 +1058,7 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 		if cl.State.Inflight.Len() >= int(s.Options.Capabilities.MaximumInflight) {
 			// add hook?
 			atomic.AddInt64(&s.Info.InflightDropped, 1)
-			s.Log.Warn("client store quota reached", "client", cl.ID, "listener", cl.Net.Listener)
+			s.Log.Warn().Str("client", cl.ID).Str("listener", cl.Net.Listener).Msg("client store quota reached")
 			return out, packets.ErrQuotaExceeded
 		}
 
@@ -1066,7 +1066,7 @@ func (s *Server) publishToClient(cl *Client, sub packets.Subscription, pk packet
 		if err != nil {
 			s.hooks.OnPacketIDExhausted(cl, pk)
 			atomic.AddInt64(&s.Info.InflightDropped, 1)
-			s.Log.Warn("packet ids exhausted", "error", err, "client", cl.ID, "listener", cl.Net.Listener)
+			s.Log.Warn().Err(err).Str("client", cl.ID).Str("listener", cl.Net.Listener).Msg("packet ids exhausted")
 			return out, packets.ErrQuotaExceeded
 		}
 
@@ -1119,7 +1119,7 @@ func (s *Server) publishRetainedToClient(cl *Client, sub packets.Subscription, e
 	for _, pkv := range s.Topics.Messages(sub.Filter) { // [MQTT-3.8.4-4]
 		_, err := s.publishToClient(cl, sub, pkv)
 		if err != nil {
-			s.Log.Debug("failed to publish retained message", "error", err, "client", cl.ID, "listener", cl.Net.Listener, "packet", pkv)
+			s.Log.Debug().Err(err).Str("client", cl.ID).Str("listener", cl.Net.Listener).Interface("packet", pkv).Msg("failed to publish retained message")
 			continue
 		}
 		s.hooks.OnRetainPublished(cl, pkv)
@@ -1488,12 +1488,12 @@ func (s *Server) publishSysTopics() {
 // Close attempts to gracefully shut down the server, all listeners, clients, and stores.
 func (s *Server) Close() error {
 	close(s.done)
-	s.Log.Info("gracefully stopping server")
+	s.Log.Info().Msg("gracefully stopping server")
 	s.Listeners.CloseAll(s.closeListenerClients)
 	s.hooks.OnStopped()
 	s.hooks.Stop()
 
-	s.Log.Info("mochi mqtt server stopped")
+	s.Log.Info().Msg("mochi mqtt server stopped")
 	return nil
 }
 
@@ -1552,7 +1552,9 @@ func (s *Server) readStore() error {
 			return fmt.Errorf("failed to load clients; %w", err)
 		}
 		s.loadClients(clients)
-		s.Log.Debug("loaded clients from store", "len", len(clients))
+		s.Log.Debug().
+			Int("len", len(clients)).
+			Msg("loaded clients from store")
 	}
 
 	if s.hooks.Provides(StoredSubscriptions) {
@@ -1561,7 +1563,9 @@ func (s *Server) readStore() error {
 			return fmt.Errorf("load subscriptions; %w", err)
 		}
 		s.loadSubscriptions(subs)
-		s.Log.Debug("loaded subscriptions from store", "len", len(subs))
+		s.Log.Debug().
+			Int("len", len(subs)).
+			Msg("loaded subscriptions from store")
 	}
 
 	if s.hooks.Provides(StoredInflightMessages) {
@@ -1570,7 +1574,9 @@ func (s *Server) readStore() error {
 			return fmt.Errorf("load inflight; %w", err)
 		}
 		s.loadInflight(inflight)
-		s.Log.Debug("loaded inflights from store", "len", len(inflight))
+		s.Log.Debug().
+			Int("len", len(inflight)).
+			Msg("loaded inflights from store")
 	}
 
 	if s.hooks.Provides(StoredRetainedMessages) {
@@ -1579,7 +1585,9 @@ func (s *Server) readStore() error {
 			return fmt.Errorf("load retained; %w", err)
 		}
 		s.loadRetained(retained)
-		s.Log.Debug("loaded retained messages from store", "len", len(retained))
+		s.Log.Debug().
+			Int("len", len(retained)).
+			Msg("loaded retained messages from store")
 	}
 
 	if s.hooks.Provides(StoredSysInfo) {
@@ -1588,7 +1596,8 @@ func (s *Server) readStore() error {
 			return fmt.Errorf("load server info; %w", err)
 		}
 		s.loadServerInfo(sysInfo.Info)
-		s.Log.Debug("loaded $SYS info from store")
+		s.Log.Debug().
+			Msg("loaded $SYS info from store")
 	}
 
 	return nil

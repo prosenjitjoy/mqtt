@@ -36,19 +36,19 @@ func TestTCPProtocol(t *testing.T) {
 
 func TestTCPProtocolTLS(t *testing.T) {
 	l := NewTCP(tlsConfig)
-	_ = l.Init(logger)
+	_ = l.Init(&logger)
 	defer l.listen.Close()
 	require.Equal(t, "tcp", l.Protocol())
 }
 
 func TestTCPInit(t *testing.T) {
 	l := NewTCP(basicConfig)
-	err := l.Init(logger)
+	err := l.Init(&logger)
 	l.Close(MockCloser)
 	require.NoError(t, err)
 
 	l2 := NewTCP(tlsConfig)
-	err = l2.Init(logger)
+	err = l2.Init(&logger)
 	l2.Close(MockCloser)
 	require.NoError(t, err)
 	require.NotNil(t, l2.config.TLSConfig)
@@ -56,7 +56,7 @@ func TestTCPInit(t *testing.T) {
 
 func TestTCPServeAndClose(t *testing.T) {
 	l := NewTCP(basicConfig)
-	err := l.Init(logger)
+	err := l.Init(&logger)
 	require.NoError(t, err)
 
 	o := make(chan bool)
@@ -81,7 +81,7 @@ func TestTCPServeAndClose(t *testing.T) {
 
 func TestTCPServeTLSAndClose(t *testing.T) {
 	l := NewTCP(tlsConfig)
-	err := l.Init(logger)
+	err := l.Init(&logger)
 	require.NoError(t, err)
 
 	o := make(chan bool)
@@ -103,7 +103,7 @@ func TestTCPServeTLSAndClose(t *testing.T) {
 
 func TestTCPEstablishThenEnd(t *testing.T) {
 	l := NewTCP(basicConfig)
-	err := l.Init(logger)
+	err := l.Init(&logger)
 	require.NoError(t, err)
 
 	o := make(chan bool)

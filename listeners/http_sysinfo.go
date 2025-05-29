@@ -8,13 +8,14 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log/slog"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/mochi-mqtt/server/v2/system"
+
+	"github.com/rs/zerolog"
 )
 
 const TypeSysInfo = "sysinfo"
@@ -22,13 +23,13 @@ const TypeSysInfo = "sysinfo"
 // HTTPStats is a listener for presenting the server $SYS stats on a JSON http endpoint.
 type HTTPStats struct {
 	sync.RWMutex
-	id      string       // the internal id of the listener
-	address string       // the network address to bind to
-	config  Config       // configuration values for the listener
-	listen  *http.Server // the http server
-	sysInfo *system.Info // pointers to the server data
-	log     *slog.Logger // server logger
-	end     uint32       // ensure the close methods are only called once
+	id      string          // the internal id of the listener
+	address string          // the network address to bind to
+	config  Config          // configuration values for the listener
+	listen  *http.Server    // the http server
+	sysInfo *system.Info    // pointers to the server data
+	log     *zerolog.Logger // server logger
+	end     uint32          // ensure the close methods are only called once
 }
 
 // NewHTTPStats initializes and returns a new HTTP listener, listening on an address.
@@ -61,8 +62,9 @@ func (l *HTTPStats) Protocol() string {
 }
 
 // Init initializes the listener.
-func (l *HTTPStats) Init(log *slog.Logger) error {
+func (l *HTTPStats) Init(log *zerolog.Logger) error {
 	l.log = log
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", l.jsonHandler)
 	l.listen = &http.Server{
@@ -91,7 +93,7 @@ func (l *HTTPStats) Serve(establish EstablishFn) {
 
 	// After the listener has been shutdown, no need to print the http.ErrServerClosed error.
 	if err != nil && atomic.LoadUint32(&l.end) == 0 {
-		l.log.Error("failed to serve.", "error", err, "listener", l.id)
+		l.log.Error().Err(err).Str("listener", l.id).Msg("failed to serve.")
 	}
 }
 

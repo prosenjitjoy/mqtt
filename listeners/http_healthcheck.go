@@ -6,11 +6,12 @@ package listeners
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const TypeHealthCheck = "healthcheck"
@@ -22,7 +23,8 @@ type HTTPHealthCheck struct {
 	address string       // the network address to bind to
 	config  Config       // configuration values for the listener
 	listen  *http.Server // the http server
-	end     uint32       // ensure the close methods are only called once
+	log     *zerolog.Logger
+	end     uint32 // ensure the close methods are only called once
 }
 
 // NewHTTPHealthCheck initializes and returns a new HTTP listener, listening on an address.
@@ -54,7 +56,9 @@ func (l *HTTPHealthCheck) Protocol() string {
 }
 
 // Init initializes the listener.
-func (l *HTTPHealthCheck) Init(_ *slog.Logger) error {
+func (l *HTTPHealthCheck) Init(log *zerolog.Logger) error {
+	l.log = log
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthcheck", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
