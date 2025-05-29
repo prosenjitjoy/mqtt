@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mochi-mqtt/server/v2/hooks/storage"
-	"github.com/mochi-mqtt/server/v2/packets"
-	"github.com/mochi-mqtt/server/v2/system"
+	"github.com/prosenjitjoy/mqtt/hooks/storage"
+	"github.com/prosenjitjoy/mqtt/packets"
+	"github.com/prosenjitjoy/mqtt/system"
 
 	"github.com/stretchr/testify/require"
 )
